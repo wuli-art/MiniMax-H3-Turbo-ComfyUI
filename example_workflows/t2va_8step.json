@@ -1,0 +1,56 @@
+{
+  "last_node_id": 2,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MiniMaxH3TurboGenerate",
+      "pos": [60, 80],
+      "size": [410, 400],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "frames", "type": "IMAGE", "links": [1], "slot_index": 0},
+        {"name": "audio", "type": "AUDIO", "links": [2], "slot_index": 1},
+        {"name": "info", "type": "STRING", "links": null, "slot_index": 2}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3TurboGenerate"},
+      "widgets_values": [
+        8,
+        "A small paper airplane glides through a bright classroom.",
+        42,
+        124,
+        768,
+        1344,
+        "",
+        "MiniMaxAI/MiniMax-H3"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3TurboSaveMP4",
+      "pos": [590, 130],
+      "size": [300, 140],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "frames", "type": "IMAGE", "link": 1},
+        {"name": "audio", "type": "AUDIO", "link": 2}
+      ],
+      "outputs": [{"name": "path", "type": "STRING", "links": null, "slot_index": 0}],
+      "properties": {"Node name for S&R": "MiniMaxH3TurboSaveMP4"},
+      "widgets_values": ["h3_turbo"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 1, 1, 2, 1, "AUDIO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {"ds": {"scale": 1, "offset": [0, 0]}},
+  "version": 0.4
+}

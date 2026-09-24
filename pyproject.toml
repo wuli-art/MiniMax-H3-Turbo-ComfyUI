@@ -1,0 +1,17 @@
+[project]
+name = "minimax-h3-turbo"
+version = "0.1.0"
+description = "ComfyUI nodes for MiniMax H3 Turbo text and frame conditioned video with audio"
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[project.urls]
+Repository = "https://github.com/wuli-art/MiniMax-H3-Turbo-ComfyUI"
+Model = "https://huggingface.co/Wuli-art/MiniMax-H3-Turbo"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.comfy]
+PublisherId = "wuli-art"
+DisplayName = "MiniMax H3 Turbo"
