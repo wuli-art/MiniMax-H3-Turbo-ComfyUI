@@ -9,7 +9,12 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from .backend import OFFICIAL_REPO, load_pipeline
+from .backend import (
+    OFFICIAL_REPO,
+    load_pipeline,
+    reset_four_step_adapter,
+    validate_four_step_call,
+)
 
 
 _pipeline = None
@@ -59,7 +64,7 @@ class MiniMaxH3TurboGenerate:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "steps": ([6, 8], {"default": 8}),
+                "steps": ([4, 6, 8], {"default": 8}),
                 "prompt": ("STRING", {"default": "", "multiline": True}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 0x7FFFFFFF}),
                 "num_frames": ("INT", {"default": 124, "min": 1, "max": 1024}),
@@ -95,13 +100,16 @@ class MiniMaxH3TurboGenerate:
         last_frame: torch.Tensor | None = None,
     ):
         steps = int(steps)
-        if steps not in (6, 8):
-            raise ValueError("steps must be 6 or 8")
+        if steps not in (4, 6, 8):
+            raise ValueError("steps must be 4, 6, or 8")
         if not torch.cuda.is_available():
             raise RuntimeError("MiniMax H3 Turbo requires a CUDA GPU")
         model_path = model_root.strip() or None
-        if model_path is not None and not Path(model_path).expanduser().is_dir():
-            raise FileNotFoundError(f"Model directory not found: {model_path}")
+        if model_path is not None:
+            local = Path(model_path).expanduser()
+            if not local.is_dir() and not (steps == 4 and local.is_file()):
+                expected = "file or directory" if steps == 4 else "directory"
+                raise FileNotFoundError(f"Model {expected} not found: {model_path}")
         components_path = components_root.strip() or OFFICIAL_REPO
         key = (model_path or "", components_path, steps)
 
@@ -130,7 +138,11 @@ class MiniMaxH3TurboGenerate:
                 _pipeline = load_pipeline(model_path, components_path, steps)
                 _pipeline_key = key
             with torch.inference_mode():
+                if steps == 4:
+                    reset_four_step_adapter(_pipeline.transformer)
                 result = _pipeline(**request)
+                if steps == 4:
+                    validate_four_step_call(_pipeline.transformer)
 
         frames = _video_tensor(result.videos[0])
         audio = _audio_value(result.audio[0], result.sampling_rate)

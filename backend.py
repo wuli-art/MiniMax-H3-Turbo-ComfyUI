@@ -1,4 +1,4 @@
-"""Fixed-schedule MiniMax H3 transformer and Diffusers pipeline loader."""
+"""MiniMax H3 Turbo transformer and Diffusers pipeline loader."""
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ from diffusers.models.modeling_utils import get_parameter_dtype
 from diffusers.models.transformers.transformer_minimax_h3 import (
     MiniMaxH3Transformer3DModel,
     MiniMaxH3TransformerOutput,
+)
+
+from .four_step import (
+    apply_four_step_adapter,
+    ensure_processor_compat,
+    reset_four_step_adapter,
+    resolve_four_step_checkpoint,
+    validate_four_step_call,
 )
 
 
@@ -212,43 +220,55 @@ def load_pipeline(
             f"MiniMax H3 Turbo requires diffusers=={DIFFUSERS_VERSION}; "
             f"found {diffusers.__version__}"
         )
-    if steps not in (6, 8):
-        raise ValueError("steps must be 6 or 8")
+    if steps not in (4, 6, 8):
+        raise ValueError("steps must be 4, 6, or 8")
 
-    if model_path is None:
-        variant = f"turbo-{steps}step"
-        model_root = Path(snapshot_download(
-            repo_id=TURBO_REPO,
-            allow_patterns=[f"{variant}/transformer/*"],
-        )) / variant
+    component_names = list(BASE_COMPONENTS)
+    if steps == 4:
+        checkpoint = resolve_four_step_checkpoint(model_path, TURBO_REPO)
+        component_names.append("transformer")
     else:
-        model_root = Path(model_path).expanduser()
-    transformer_path = model_root / "transformer"
-    if not transformer_path.is_dir():
-        raise FileNotFoundError(f"Transformer directory not found: {transformer_path}")
-    config = json.loads((transformer_path / "config.json").read_text())
-    if config.get("fixed_num_steps") != steps:
-        raise ValueError(
-            f"Selected {steps}-step mode, but {transformer_path} is "
-            f"a {config.get('fixed_num_steps')}-step checkpoint"
-        )
+        if model_path is None:
+            variant = f"turbo-{steps}step"
+            model_root = Path(snapshot_download(
+                repo_id=TURBO_REPO,
+                allow_patterns=[f"{variant}/transformer/*"],
+            )) / variant
+        else:
+            model_root = Path(model_path).expanduser()
+        transformer_path = model_root / "transformer"
+        if not transformer_path.is_dir():
+            raise FileNotFoundError(f"Transformer directory not found: {transformer_path}")
+        config = json.loads((transformer_path / "config.json").read_text())
+        if config.get("fixed_num_steps") != steps:
+            raise ValueError(
+                f"Selected {steps}-step mode, but {transformer_path} is "
+                f"a {config.get('fixed_num_steps')}-step checkpoint"
+            )
 
     base_root = Path(components_path).expanduser()
     if not base_root.is_dir():
         base_root = Path(snapshot_download(
             repo_id=components_path,
             allow_patterns=["model_index.json", "modular_model_index.json"]
-            + [f"{name}/*" for name in BASE_COMPONENTS],
+            + [f"{name}/*" for name in component_names],
         ))
 
     manager = ComponentsManager()
     manager.enable_auto_cpu_offload(device="cuda", memory_reserve_margin="12GB")
     pipe = ModularPipeline.from_pretrained(base_root, components_manager=manager)
     pipe.load_components(
-        names=list(BASE_COMPONENTS),
+        names=component_names,
         dtype=torch.bfloat16,
         pretrained_model_name_or_path=str(base_root),
     )
+    ensure_processor_compat(pipe.processor)
+
+    if steps == 4:
+        config = apply_four_step_adapter(pipe.transformer, checkpoint)
+        pipe.scheduler.set_shift(float(config["video_flow_shift"]))
+        pipe.audio_scheduler.set_shift(float(config["audio_flow_shift"]))
+        return pipe
 
     transformer = FixedMiniMaxH3Transformer3DModel.from_pretrained(
         transformer_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True

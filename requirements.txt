@@ -1,3 +1,5 @@
 diffusers==0.40.0
+transformers>=4.57.0
+peft>=0.17.0
 accelerate>=1.0
 av>=17.0.0
